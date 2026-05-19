@@ -1,65 +1,13 @@
-pipeline{
-    agent {
-        label 'agent-1'
-    }
-    environment{
-        appVersion = ""
-        REGION = "us-east-1"
-        ACC_ID = "430774481266"
-        PROJECT= "roboshop"
-        COMPONENT = "catalogue"
-    }
-    options{
-        timeout(time: 30, unit: 'MINUTES')
-        disableConcurrentBuilds()
-    }
-    stages{
-        stage('Read Json Version'){
-            steps{
-                script{
-                    def packageJSON = readJSON file: 'package.json'
-                    appVersion = packageJSON.version
-                    echo "appVersion:${appVersion}"
-                }
-            }
+@Library('jenkins-shared-libraries') _
 
-        }
-        stage('Install Dependencies'){
-            steps{
-                script{
-                    sh"""
-                        npm install
-                    """
-                }
-            }
-        }
-        stage('Docker Build'){
-            steps{
-                script{
-                    withAWS(credentials: 'aws-cred', region: 'us-east-1') {
-                        sh """
-                            aws ecr get-login-password --region ${REGION} | docker login --username AWS --password-stdin ${ACC_ID}.dkr.ecr.us-east-1.amazonaws.com
-                            docker build -t ${ACC_ID}.dkr.ecr.us-east-1.amazonaws.com/${PROJECT}/${COMPONENT}:${appVersion} .
-                            docker push ${ACC_ID}.dkr.ecr.us-east-1.amazonaws.com/${PROJECT}/${COMPONENT}:${appVersion}
-                        """
-                    }
+def configMap [
+    project: "roboshop",
+    component: "user"
+]
 
-                }
-            }
-        }
-        stage('Trivy Scan'){
-            steps{
-                script{
-                    sh"""
-                        trivy image --pkg-types os --scanners vuln --severity HIGH,CRITICAL,MEDIUM --exit-code 1 --ignore-unfixed ${ACC_ID}.dkr.ecr.${REGION}.amazonaws.com/${PROJECT}/${COMPONENT}:${appVersion}
-                    """
-                }
-            }
-        }
-    }
-    post{
-        always{
-            deleteDir()
-        }
-    }
+if (! env.BRANCH_NAME.equalsIgnoreCase('main')){
+    nodeJSEKSPipeline(configMap)
+}
+else{
+    echo "Please follow CR-Process"
 }
